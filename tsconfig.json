@@ -4,7 +4,7 @@
     "strict": true,
     "jsx": "react-native",
     "target": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "allowJs": true,
     "noEmit": true,
     "esModuleInterop": true,
@@ -16,6 +16,7 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    "declarations.d.ts",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ],

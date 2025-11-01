@@ -1,80 +1,85 @@
-import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  ActivityIndicator,
-  Share,
-  FlatList,
-  StatusBar,
-  useWindowDimensions,
-} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Video, ResizeMode } from "expo-av";
 import axios from "axios";
 import { formatDistanceToNow } from "date-fns";
-import { Ionicons } from "@expo/vector-icons";
+import { ResizeMode, Video } from "expo-av";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  StatusBar,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+  Share,
+} from "react-native";
+import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAuth } from "../../../src/context/AuthContext";
 import defaultimage from "../../../assets/images/black.jpg";
+import { useAuth } from "../../../src/context/AuthContext";
 
 export default function Reels() {
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const [videos, setVideos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
+  const [videos, setVideos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [playingIndex, setPlayingIndex] = useState<number | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
+
   const API_BASE = "https://reels-backend-4qdr.onrender.com";
+  const videoRefs = useRef<{ [key: number]: Video | null }>({});
 
-  useEffect(() => {
-    fetchVideos();
-  }, []);
+  /** 🧠 Fetch Videos */
+  const fetchVideos = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_BASE}/api/videos`);
 
- const fetchVideos = async () => {
-  try {
-    const res = await axios.get(`${API_BASE}/api/videos`);
+      const updatedVideos = res.data.videos.map((v: any) => ({
+        ...v,
+        isLiked: v.likedBy?.includes(user?.id),
+      }));
 
-    // ✅ Add isLiked based on likedBy array
-    const updatedVideos = res.data.videos.map((v: any) => ({
-      ...v,
-      isLiked: v.likedBy?.includes(user?.id), // check if user liked it
-    }));
+      setVideos(updatedVideos);
+    } catch (err: any) {
+      console.error("Error fetching videos:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    setVideos(updatedVideos);
-  } catch (err: any) {
-    console.error("Error fetching videos:", err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+  /** 🔁 Refresh when tab is revisited */
+  useFocusEffect(
+    useCallback(() => {
+      fetchVideos();
+      return () => {
+        // Pause all videos when leaving
+        Object.values(videoRefs.current).forEach((ref) => {
+          if (ref) ref.pauseAsync();
+        });
+      };
+    }, [])
+  );
 
-
+  /** ❤️ Like Video */
   const handleLike = async (videoId: string) => {
     if (!user) {
       alert("Please login to like videos");
       return;
     }
-
     try {
       const token = await AsyncStorage.getItem("token");
-      console.log("🔑 Token retrieved before like:", token);
-
-      if (!token) {
-        console.warn("⚠️ No token found in AsyncStorage — user might be logged out.");
-        return;
-      }
+      if (!token) return;
 
       const res = await axios.post(
         `${API_BASE}/api/videolike/${videoId}/like`,
         {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      console.log("✅ Like success response:", res.data);
 
       const { message } = res.data;
 
@@ -85,50 +90,60 @@ export default function Reels() {
           return {
             ...v,
             likesCount: v.likesCount + (isUnlike ? -1 : 1),
-            isLiked: !isUnlike, // ✅ update like state for UI
+            isLiked: !isUnlike,
           };
         })
       );
     } catch (err: any) {
       console.error("❌ Like error:", err.message);
-      if (err.response) {
-        console.error("Backend Response:", err.response.data);
-        console.error("Status Code:", err.response.status);
-      }
     }
   };
 
-  const handleShare = async (url: string) => {
-    try {
-      await Share.share({
-        message: `Check out this video! ${url}`,
+  /** 🎬 Control which video plays based on view */
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+    if (viewableItems.length > 0) {
+      const index = viewableItems[0].index;
+      setPlayingIndex(index);
+
+      Object.entries(videoRefs.current).forEach(([i, ref]) => {
+        if (ref) {
+          if (Number(i) === index && !isPaused) {
+            ref.playAsync();
+          } else {
+            ref.pauseAsync();
+          }
+        }
       });
-    } catch (error) {
-      console.error("Error sharing:", error);
+    }
+  }).current;
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 80,
+  }).current;
+
+  /** 🖐 Tap to toggle pause/play */
+  const handleVideoPress = (index: number) => {
+    const ref = videoRefs.current[index];
+    if (ref) {
+      if (isPaused) {
+        ref.playAsync();
+      } else {
+        ref.pauseAsync();
+      }
+      setIsPaused(!isPaused);
     }
   };
 
-  if (loading)
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "black",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
-
-  const renderItem = ({ item }: { item: any }) => {
+  /** 💾 Render Video Item */
+  const renderItem = ({ item, index }: { item: any; index: number }) => {
     const timeAgo = item.createdAt
       ? formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })
       : "";
 
     return (
-      <View
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={() => handleVideoPress(index)}
         style={{
           width: screenWidth,
           height: screenHeight,
@@ -137,33 +152,25 @@ export default function Reels() {
           alignItems: "center",
         }}
       >
-        <View
+        <Video
+          ref={(ref) => {
+  videoRefs.current[index] = ref;
+}}
+          source={{ uri: item.s3_url }}
+          resizeMode={ResizeMode.COVER}
+          shouldPlay={index === playingIndex && !isPaused}
+          isLooping
           style={{
             width: screenWidth,
             height: screenHeight,
-            bottom: 120 + insets.bottom,
-            justifyContent: "center",
-            alignItems: "center",
-            borderRadius: 10,
-            overflow: "hidden",
           }}
-        >
-          <Video
-            source={{ uri: item.s3_url }}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay
-            isLooping
-            style={{
-              width: "100%",
-              height: "100%",
-            }}
-          />
-        </View>
+        />
 
+        {/* Overlay Info */}
         <View
           style={{
             position: "absolute",
-            bottom: 145 + insets.bottom,
+            bottom: 50 + insets.bottom,
             left: 15,
             right: 15,
             flexDirection: "row",
@@ -192,7 +199,6 @@ export default function Reels() {
                   marginRight: 8,
                 }}
               />
-
               <View>
                 <Text style={{ color: "#fff", fontWeight: "bold" }}>
                   {item.uploadedBy?.username || "Unknown"}
@@ -213,16 +219,16 @@ export default function Reels() {
             </Text>
           </View>
 
-          {/* ❤️ Right side — like + share */}
+          {/* Right Side — Like + Share */}
           <View style={{ alignItems: "center", marginRight: 10 }}>
             <TouchableOpacity
               onPress={() => handleLike(item.id)}
               style={{ marginBottom: 20 }}
             >
               <Ionicons
-                name={item.isLiked ? "heart" : "heart-outline"} // ✅ toggle icon
+                name={item.isLiked ? "heart" : "heart-outline"}
                 size={30}
-                color={item.isLiked ? "red" : "white"} // ✅ toggle color
+                color={item.isLiked ? "red" : "white"}
               />
               <Text
                 style={{
@@ -235,15 +241,32 @@ export default function Reels() {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => handleShare(item.s3_url)}>
+            <TouchableOpacity onPress={() => Share.share({ message: item.s3_url })}>
               <Ionicons name="share-outline" size={30} color="white" />
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
+  /** 🌀 Loading State */
+  if (loading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "black",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <ActivityIndicator size="large" color="#fff" />
+      </View>
+    );
+  }
+
+  /** 📜 Main UI */
   return (
     <View style={{ flex: 1, backgroundColor: "black" }}>
       <StatusBar barStyle="light-content" translucent />
@@ -253,6 +276,10 @@ export default function Reels() {
         renderItem={renderItem}
         pagingEnabled
         showsVerticalScrollIndicator={false}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        removeClippedSubviews
+        windowSize={2}
       />
     </View>
   );

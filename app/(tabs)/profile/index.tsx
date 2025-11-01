@@ -1,24 +1,24 @@
-import React, { useEffect, useState, useCallback } from "react";
+import axios from "axios";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { VideoView, useVideoPlayer } from "expo-video";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  View,
-  Text,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
   FlatList,
-  TouchableOpacity,
   Image,
   Modal,
-  ActivityIndicator,
   StyleSheet,
-  Dimensions,
-  Alert,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import axios from "axios";
-import { useRouter } from "expo-router";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../src/context/AuthContext";
-import { VideoView, useVideoPlayer } from "expo-video";
-import * as VideoThumbnails from "expo-video-thumbnails";
 
-const { width, height } = Dimensions.get("window");
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 type VideoItem = {
   id: string;
@@ -26,7 +26,7 @@ type VideoItem = {
   title: string;
   description: string;
   uploadedBy: { username: string; profilePic?: string | null };
-  thumbnail?: string | null; // 👈 added
+  thumbnail_url: string | null;
 };
 
 type ProfileResponse = {
@@ -34,16 +34,7 @@ type ProfileResponse = {
   videos: VideoItem[];
 };
 
-// Fullscreen modal player
-function VideoPlayerModal({
-  visible,
-  video,
-  onClose,
-}: {
-  visible: boolean;
-  video: VideoItem | null;
-  onClose: () => void;
-}) {
+function VideoPlayerModal({ visible, video, onClose }: any) {
   const [isPaused, setIsPaused] = useState(false);
   const player = useVideoPlayer(video?.s3_url ?? "", (p) => {
     p.loop = true;
@@ -97,22 +88,13 @@ function VideoPlayerModal({
 export default function ProfileScreen() {
   const { user: authUser, logout } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-
-  const generateThumbnail = async (videoUrl: string) => {
-    try {
-      const { uri } = await VideoThumbnails.getThumbnailAsync(videoUrl, {
-        time: 1000,
-      });
-      return uri;
-    } catch (e) {
-      console.warn("Thumbnail generation error", e);
-      return null;
-    }
-  };
 
   const fetchProfile = useCallback(async () => {
     if (!authUser) return;
@@ -121,19 +103,10 @@ export default function ProfileScreen() {
       const res = await axios.get<ProfileResponse>(
         `https://reels-backend-4qdr.onrender.com/api/users/${authUser.id}/profile`
       );
-
-      // 👇 Generate thumbnails for each video
-      const videosWithThumbs = await Promise.all(
-        res.data.videos.map(async (v) => ({
-          ...v,
-          thumbnail: await generateThumbnail(v.s3_url),
-        }))
-      );
-
-      setProfile({ ...res.data, videos: videosWithThumbs });
+      setProfile(res.data);
     } catch (err) {
       console.error("Error fetching profile:", err);
-      Alert.alert("Error", "Could not fetch your profile data.");
+      Alert.alert("Oops!", "Could not load your profile right now 💔");
     } finally {
       setLoading(false);
     }
@@ -145,78 +118,69 @@ export default function ProfileScreen() {
 
   if (!authUser) {
     return (
-      <SafeAreaView style={styles.centered}>
-        <Text style={styles.notLoggedText}>You’re not logged in</Text>
-        <TouchableOpacity
-          onPress={() => router.push("/(auth)/login")}
-          style={[styles.primaryButton, { marginBottom: 10 }]}
-        >
-          <Text style={styles.primaryButtonText}>Sign In</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => router.push("/(auth)/register")}
-          style={styles.secondaryButton}
-        >
-          <Text style={styles.primaryButtonText}>Register</Text>
-        </TouchableOpacity>
+      <SafeAreaView style={styles.container}>
+        <LinearGradient colors={["#FFD1DC", "#FFB6C1", "#FFF0F5"]} style={styles.flexFill}>
+          <View style={styles.centered}>
+            <Text style={styles.notLoggedText}>You’re not logged in 🍭</Text>
+            <TouchableOpacity
+              onPress={() => router.push("/(auth)/login")}
+              style={[styles.button, { backgroundColor: "#FF9EC4" }]}
+            >
+              <Text style={styles.buttonText}>Sign In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push("/(auth)/register")}
+              style={[styles.button, { backgroundColor: "#FFD1DC", marginTop: 10 }]}
+            >
+              <Text style={[styles.buttonText, { color: "#FF6FB5" }]}>Register</Text>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
       </SafeAreaView>
     );
   }
 
-  if (loading) {
+  if (!profile && loading) {
     return (
-      <SafeAreaView style={[styles.centered]}>
-        <ActivityIndicator size="large" color="#fff" />
-        <Text style={{ color: "#fff", marginTop: 12 }}>
-          Loading your uploads...
-        </Text>
+      <SafeAreaView style={styles.container}>
+        <LinearGradient colors={["#FFD1DC", "#FFB6C1", "#FFF0F5"]} style={styles.flexFill}>
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color="#FF6FB5" />
+            <Text style={styles.loadingText}>Loading your sweet profile 🍬</Text>
+          </View>
+        </LinearGradient>
       </SafeAreaView>
     );
   }
 
-  if (!profile) return null;
-
-  const { user, videos } = profile;
+  const { user, videos } = profile || {};
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.profileSection}>
-          <Image
-            source={{
-              uri:
-                user.profilePic ||
-                "https://cdn-icons-png.flaticon.com/512/149/149071.png",
-            }}
-            style={styles.profilePic}
-          />
-          <View style={{ marginLeft: 12 }}>
-            <Text style={styles.username}>@{user.username}</Text>
-            <View style={styles.statsRow}>
-              <Text style={styles.stats}>Posts: {videos.length}</Text>
-              
+      <LinearGradient colors={["#FFD1DC", "#FFB6C1", "#FFF0F5"]} style={styles.flexFill}>
+        {/* 🍭 Header */}
+        <View style={styles.header}>
+          <View style={styles.profileSection}>
+            <Image
+              source={{
+                uri:
+                  user?.profilePic ||
+                  "https://cdn-icons-png.flaticon.com/512/149/149071.png",
+              }}
+              style={styles.profilePic}
+            />
+            <View style={{ marginLeft: 14 }}>
+              <Text style={styles.username}>@{user?.username}</Text>
+              <Text style={styles.stats}>🍩 Posts: {videos?.length}</Text>
             </View>
           </View>
-        </View>
 
-        <TouchableOpacity onPress={logout} style={styles.logoutButton}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Video Grid */}
-      {videos.length === 0 ? (
-        <View style={styles.centered}>
-          <Text style={{ color: "#ddd", fontSize: 16 }}>No uploads yet 😕</Text>
-          <TouchableOpacity
-            onPress={() => router.push("/(tabs)/upload")}
-            style={[styles.primaryButton, { marginTop: 12 }]}
-          >
-            <Text style={styles.primaryButtonText}>Upload Now</Text>
+          <TouchableOpacity onPress={logout} style={styles.logoutButton}>
+            <Text style={styles.logoutText}>🚪 Logout</Text>
           </TouchableOpacity>
         </View>
-      ) : (
+
+        {/* 🍡 Video Grid */}
         <FlatList
           data={videos}
           numColumns={3}
@@ -224,7 +188,7 @@ export default function ProfileScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.thumbnailContainer}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
               onPress={() => {
                 setSelectedVideo(item);
                 setModalVisible(true);
@@ -233,91 +197,120 @@ export default function ProfileScreen() {
               <Image
                 source={{
                   uri:
-                    item.thumbnail ||
+                    item.thumbnail_url ||
                     "https://cdn.pixabay.com/photo/2024/07/20/17/12/warning-8908707_1280.png",
                 }}
                 style={styles.thumbnail}
-                resizeMode="cover"
               />
             </TouchableOpacity>
           )}
+          contentContainerStyle={
+            videos?.length === 0
+              ? styles.centered
+              : { flexGrow: 1, paddingHorizontal: 6, paddingBottom: 90 }
+          }
+          ListEmptyComponent={
+            loading
+              ? null
+              : (
+                <View style={styles.centered}>
+                  <Text style={styles.emptyText}>No sweet uploads yet 🍬</Text>
+                  <TouchableOpacity
+                    onPress={() => router.push("/(tabs)/upload")}
+                    style={[styles.button, { marginTop: 12 }]}
+                  >
+                    <Text style={styles.buttonText}>Upload Now 🍓</Text>
+                  </TouchableOpacity>
+                </View>
+              )
+          }
+          showsVerticalScrollIndicator={false}
         />
-      )}
 
-      {/* Fullscreen Modal Player */}
-      <VideoPlayerModal
-        visible={modalVisible}
-        video={selectedVideo}
-        onClose={() => {
-          setModalVisible(false);
-          setSelectedVideo(null);
-        }}
-      />
+        <VideoPlayerModal
+          visible={modalVisible}
+          video={selectedVideo}
+          onClose={() => {
+            setModalVisible(false);
+            setSelectedVideo(null);
+          }}
+        />
+      </LinearGradient>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#000",
-  },
+  container: { flex: 1, backgroundColor: "#FFB6C1" },
+  flexFill: { flex: 1 },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
-    borderBottomColor: "#222",
-    borderBottomWidth: 1,
+    justifyContent: "space-between",
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 16,
+    backgroundColor: "rgba(96, 20, 108, 0)",
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,182,193,0.6)",
   },
   profileSection: { flexDirection: "row", alignItems: "center" },
-  profilePic: { width: 60, height: 60, borderRadius: 30 },
-  username: { color: "#fff", fontSize: 18, fontWeight: "700" },
-  statsRow: { flexDirection: "row", marginTop: 4, gap: 10 },
-  stats: { color: "#aaa", fontSize: 13 },
-  logoutButton: {
-    backgroundColor: "red",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+  profilePic: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    borderWidth: 2,
+    borderColor: "#FFB6C1",
   },
-  logoutText: { color: "#fff", fontWeight: "700" },
+  username: { color: "#ff00c3ff", fontSize: 20, fontWeight: "700" },
+  stats: { color: "#000000ff", fontSize: 14, fontWeight: "600", marginTop: 4 },
+  logoutButton: {
+    backgroundColor: "#FF6FB5",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+  },
+  logoutText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   thumbnailContainer: {
     flex: 1 / 3,
     aspectRatio: 1,
-    margin: 1,
-    backgroundColor: "#111",
+    margin: 4,
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: "#FFD1DC",
+    backgroundColor: "#FFF",
   },
   thumbnail: { width: "100%", height: "100%" },
-  primaryButton: {
-    backgroundColor: "#007bff",
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 8,
+  button: {
+    backgroundColor: "#FF6FB5",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    elevation: 4,
+    shadowColor: "#FFB6C1",
   },
-  secondaryButton: {
-    backgroundColor: "#6c757d",
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 8,
+  buttonText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  loadingText: {
+    color: "#FF6FB5",
+    marginTop: 10,
+    fontWeight: "600",
+    fontSize: 16,
   },
-  primaryButtonText: { color: "#fff", fontWeight: "700" },
-  notLoggedText: { fontSize: 18, color: "#fff", marginBottom: 16 },
-
+  notLoggedText: { color: "#FF6FB5", fontSize: 18, marginBottom: 16 },
+  emptyText: { color: "#FF6FB5", fontSize: 16, textAlign: "center" },
   fullscreenContainer: {
     flex: 1,
     backgroundColor: "#000",
     justifyContent: "center",
     alignItems: "center",
   },
-  fullscreenVideo: { width: width, height: height },
+  fullscreenVideo: { width: screenWidth, height: screenHeight },
   overlay: {
     position: "absolute",
-    top: 0,
-    left: 0,
     width: "100%",
     height: "100%",
     backgroundColor: "rgba(0,0,0,0.25)",
@@ -329,17 +322,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 50,
     right: 20,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(255,192,203,0.7)",
     padding: 8,
     borderRadius: 20,
   },
   closeText: { color: "#fff", fontSize: 18 },
-  videoCaption: {
-    position: "absolute",
-    bottom: 60,
-    left: 20,
-    right: 20,
-  },
+  videoCaption: { position: "absolute", bottom: 60, left: 20, right: 20 },
   captionTitle: { color: "#fff", fontSize: 18, fontWeight: "700" },
-  captionDesc: { color: "#ccc", marginTop: 4, fontSize: 14 },
+  captionDesc: { color: "#eee", marginTop: 4, fontSize: 14 },
 });

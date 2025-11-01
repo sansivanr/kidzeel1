@@ -46,29 +46,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // ✅ Login
   const login = async (username: string, password: string) => {
-    try {
-      console.log("🔹 Attempting login with:", username);
-      const res = await axios.post(`${API_BASE}/api/signin`, { username, password });
+  try {
+    const res = await axios.post(`${API_BASE}/api/signin`, { username, password });
 
-      console.log("✅ Server response:", res.data);
-
-      if (!res.data?.token) {
-        alert("No token received from server.");
-        return false;
-      }
-
-      await AsyncStorage.setItem("token", res.data.token);
-      await AsyncStorage.setItem("user", JSON.stringify(res.data.user));
-
-      setUser(res.data.user);
-      console.log("🎯 User saved to context:", res.data.user);
-      return true;
-    } catch (err: any) {
-      console.error("❌ Login error:", err.response?.data || err.message);
-      alert(err.response?.data?.error || "Failed to log in. Please try again.");
-      return false;
+    if (!res.data?.token) {
+      return false; // no alert, just fail silently
     }
-  };
+
+    await AsyncStorage.setItem("token", res.data.token);
+    await AsyncStorage.setItem("user", JSON.stringify(res.data.user));
+
+    setUser(res.data.user);
+    return true;
+  } catch (err: any) {
+    // no console.log, no alert — let the Login screen handle the UI
+    return false;
+  }
+};
+
 
   // ✅ Register
   const register = async (username: string, password: string) => {
