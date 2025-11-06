@@ -23,20 +23,21 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 type VideoItem = {
   id: string;
   s3_url: string;
+  cdn_url?: string;
   title: string;
   description: string;
-  uploadedBy: { username: string; profilePic?: string | null };
+  uploadedBy: { username: string; profileUrl?: string | null };
   thumbnail_url: string | null;
 };
 
 type ProfileResponse = {
-  user: { username: string; profilePic: string | null };
+  user: { username: string; profileUrl: string | null };
   videos: VideoItem[];
 };
 
 function VideoPlayerModal({ visible, video, onClose }: any) {
   const [isPaused, setIsPaused] = useState(false);
-  const player = useVideoPlayer(video?.s3_url ?? "", (p) => {
+  const player = useVideoPlayer(video?.cdn_url ?? video?.s3_url ?? "", (p) => {
     p.loop = true;
     if (visible) p.play();
   });
@@ -155,7 +156,7 @@ export default function ProfileScreen() {
 
   const { user, videos } = profile || {};
 
-  return (
+  return ( 
     <SafeAreaView style={styles.container}>
       <LinearGradient colors={["#FFD1DC", "#FFB6C1", "#FFF0F5"]} style={styles.flexFill}>
         {/* 🍭 Header */}
@@ -164,10 +165,10 @@ export default function ProfileScreen() {
             <Image
               source={{
                 uri:
-                  user?.profilePic ||
+                  user?.profileUrl ||
                   "https://cdn-icons-png.flaticon.com/512/149/149071.png",
               }}
-              style={styles.profilePic}
+              style={styles.profileUrl}
             />
             <View style={{ marginLeft: 14 }}>
               <Text style={styles.username}>@{user?.username}</Text>
@@ -241,7 +242,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FFB6C1" },
+  container: { flex: 1, backgroundColor: "#FFF0F5" },
   flexFill: { flex: 1 },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: {
@@ -258,7 +259,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,182,193,0.6)",
   },
   profileSection: { flexDirection: "row", alignItems: "center" },
-  profilePic: {
+  profileUrl: {
     width: 70,
     height: 70,
     borderRadius: 35,

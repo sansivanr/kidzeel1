@@ -1,24 +1,27 @@
-import React, { useState, useEffect, useRef } from "react";
+import axios from "axios"; // Make sure axios is installed
+import type { ImagePickerAsset } from "expo-image-picker";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
+  ActivityIndicator,
   Animated,
   Easing,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { useAuth } from "../../src/context/AuthContext";
-import axios from "axios"; // Make sure axios is installed
+
 
 export default function Register() {
   const router = useRouter();
   const { register } = useAuth();
-
+  const [profilePic, setProfilePic] = useState<ImagePickerAsset | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [checking, setChecking] = useState(false);
@@ -80,13 +83,35 @@ export default function Register() {
     ]).start();
   };
 
+  const pickImage = async () => {
+  // Ask permission
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (status !== "granted") {
+    alert("Permission denied! You need to allow access to your gallery.");
+    return;
+  }
+
+  // Launch picker
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 0.8,
+  });
+
+  if (!result.canceled && result.assets.length > 0) {
+    setProfilePic(result.assets[0]);
+  }
+};
+
+
   const handleRegister = async () => {
     if (!available || !passwordValid) {
       triggerShake();
       return;
     }
     setLoading(true);
-    const success = await register(username, password);
+    const success = await register(username, password, profilePic);
     setLoading(false);
     if (success) router.replace("/(tabs)/profile");
   };
@@ -122,6 +147,47 @@ export default function Register() {
 >
   <Text style={{ color: "#FF7F50", fontWeight: "bold", fontSize: 16 }}>← Back</Text>
 </TouchableOpacity>
+        <View style={{ alignItems: "center", marginTop: 80 }}>
+  <TouchableOpacity onPress={pickImage}>
+    {profilePic ? (
+      <Animated.Image
+        source={{ uri: profilePic.uri }}
+        style={{
+          width: 120,
+          height: 120,
+          borderRadius: 60,
+          borderWidth: 4,
+          borderColor: "#FFD580",
+        }}
+      />
+    ) : (
+      <View
+        style={{
+          width: 120,
+          height: 120,
+          borderRadius: 60,
+          backgroundColor: "#FFF0D1",
+          justifyContent: "center",
+          alignItems: "center",
+          borderWidth: 3,
+          borderColor: "#FFD580",
+        }}
+      >
+        <Text style={{ fontSize: 40 }}>📸</Text>
+      </View>
+    )}
+  </TouchableOpacity>
+
+  <Text
+    style={{
+      marginTop: 8,
+      color: "#FFA500",
+      fontWeight: "500",
+    }}
+  >
+    Tap to add profile picture
+  </Text>
+</View>
 
         <Text
           style={{

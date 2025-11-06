@@ -3,19 +3,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { formatDistanceToNow } from "date-fns";
 import { ResizeMode, Video } from "expo-av";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Image,
+  Share,
   StatusBar,
   Text,
   TouchableOpacity,
   View,
   useWindowDimensions,
-  Share,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import defaultimage from "../../../assets/images/black.jpg";
 import { useAuth } from "../../../src/context/AuthContext";
@@ -140,6 +140,8 @@ export default function Reels() {
       ? formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })
       : "";
 
+    const videoUri = item.cdn_url  || item.s3_url;
+
     return (
       <TouchableOpacity
         activeOpacity={1}
@@ -156,7 +158,7 @@ export default function Reels() {
           ref={(ref) => {
   videoRefs.current[index] = ref;
 }}
-          source={{ uri: item.s3_url }}
+          source={{ uri: videoUri }}
           resizeMode={ResizeMode.COVER}
           shouldPlay={index === playingIndex && !isPaused}
           isLooping
@@ -188,8 +190,8 @@ export default function Reels() {
             >
               <Image
                 source={
-                  item.uploadedBy?.profilePic
-                    ? { uri: item.uploadedBy.profilePic }
+                  item.uploadedBy?.profileUrl
+                    ? { uri: item.uploadedBy.profileUrl }
                     : defaultimage
                 }
                 style={{
@@ -241,7 +243,7 @@ export default function Reels() {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => Share.share({ message: item.s3_url })}>
+            <TouchableOpacity onPress={() => Share.share({ message: videoUri })}>
               <Ionicons name="share-outline" size={30} color="white" />
             </TouchableOpacity>
           </View>

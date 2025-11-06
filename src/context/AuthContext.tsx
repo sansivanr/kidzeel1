@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
+import type { ImagePickerAsset } from "expo-image-picker";
+import React, { createContext, useContext, useEffect, useState } from "react";
+
 
 // Define user type
 type User = {
@@ -14,7 +16,7 @@ type AuthContextType = {
   user: User | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<boolean>;
-  register: (username: string, password: string) => Promise<boolean>;
+  register: (username: string, password: string, profilePic?: ImagePickerAsset | null) => Promise<boolean>;
   logout: () => Promise<void>;
 };
 
@@ -66,11 +68,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 
   // ✅ Register
-  const register = async (username: string, password: string) => {
+  const register = async (username: string, password: string, profilePic?: ImagePickerAsset | null) => {
     try {
       const formData = new FormData();
       formData.append("username", username);
       formData.append("password", password);
+
+      if (profilePic) {
+      formData.append(
+        "profilePic",
+        {
+          uri: profilePic.uri,
+          name: `profile.${profilePic.fileName?.split(".").pop() || "jpg"}`,
+          type: profilePic.mimeType || "image/jpeg",
+        } as any
+      );
+    }
 
       const res = await axios.post(`${API_BASE}/api/register`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
