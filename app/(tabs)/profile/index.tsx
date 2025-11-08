@@ -97,6 +97,8 @@ export default function ProfileScreen() {
   const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
+  
+
   const fetchProfile = useCallback(async () => {
     if (!authUser) return;
     setLoading(true);
@@ -112,6 +114,14 @@ export default function ProfileScreen() {
       setLoading(false);
     }
   }, [authUser]);
+
+  /** 🍭 Pull-to-refresh handler */
+const onRefresh = useCallback(async () => {
+  setRefreshing(true);
+  await fetchProfile();
+  setRefreshing(false);
+}, [fetchProfile]);
+
 
   useEffect(() => {
     fetchProfile();
@@ -226,6 +236,8 @@ export default function ProfileScreen() {
               )
           }
           showsVerticalScrollIndicator={false}
+          refreshing={refreshing}       // ✅ NEW
+  onRefresh={onRefresh}         // ✅ NEW
         />
 
         <VideoPlayerModal

@@ -209,16 +209,34 @@ export default function Reels() {
               </View>
             </View>
 
-            <Text
-              style={{
-                color: "#fff",
-                marginBottom: 8,
-                fontSize: 14,
-              }}
-              numberOfLines={2}
-            >
-              {item.description || ""}
-            </Text>
+            {/* 📝 Title + Description */}
+{item.title ? (
+  <Text
+    style={{
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "bold",
+      marginBottom: 4,
+    }}
+    numberOfLines={1}
+  >
+    {item.title}
+  </Text>
+) : null}
+
+{item.description ? (
+  <Text
+    style={{
+      color: "#ddd",
+      fontSize: 14,
+      marginBottom: 8,
+    }}
+    numberOfLines={2}
+  >
+    {item.description}
+  </Text>
+) : null}
+
           </View>
 
           {/* Right Side — Like + Share */}
